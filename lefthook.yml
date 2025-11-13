@@ -1,0 +1,298 @@
+# Lefthook configuration for React Native/Expo project with Biome and TypeScript
+# https://lefthook.dev/intro.html
+
+# Global settings
+colors: true
+no_tty: false
+min_version: 1.5.0
+
+# Pre-commit hooks - run before each commit
+pre-commit:
+  parallel: true
+  commands:
+    # Biome linting and formatting
+    biome-check:
+      glob: "*.{js,jsx,ts,tsx,json}"
+      run: |
+        echo "🔍 Running Biome check on staged files..."
+        if ! npx @biomejs/biome check --write {staged_files}; then
+          echo ""
+          echo "❌ BIOME CHECK FAILED"
+          echo ""
+          echo "🔧 Common issues and fixes:"
+          echo "   • Syntax errors: Check for missing semicolons, brackets, etc."
+          echo "   • Import/export issues: Verify import paths and exports"
+          echo "   • TypeScript errors: Fix type annotations and declarations"
+          echo "   • Formatting issues: Biome tried to auto-fix, check staged changes"
+          echo ""
+          echo "🚀 Next steps:"
+          echo "   1. Review the errors above"
+          echo "   2. Fix the issues in your code"
+          echo "   3. Run 'git add .' to stage the fixes"
+          echo "   4. Try committing again"
+          echo ""
+          echo "💡 Tip: Run 'npx @biomejs/biome check --write .' to fix all files"
+          echo ""
+          exit 1
+        fi
+        echo "✅ Biome check passed!"
+      stage_fixed: true
+      fail_text: ""
+
+# Pre-push hooks - run before pushing to remote
+pre-push:
+  parallel: false
+  commands:
+    # Run TypeScript check to ensure everything compiles
+    typescript-check:
+      run: |
+        echo "🔍 Running TypeScript check..."
+        if ! npx tsc --noEmit; then
+          echo ""
+          echo "❌ TYPESCRIPT CHECK FAILED"
+          echo ""
+          echo "🔧 Common TypeScript issues and fixes:"
+          echo "   • Type errors: Fix type annotations and declarations"
+          echo "   • Import errors: Check import paths and missing dependencies"
+          echo "   • Missing dependencies: Run 'pnpm install' to install packages"
+          echo "   • Syntax errors: Check for invalid TypeScript syntax"
+          echo "   • Configuration issues: Verify tsconfig.json is valid"
+          echo ""
+          echo "🚀 Next steps:"
+          echo "   1. Review the TypeScript errors above"
+          echo "   2. Fix the type issues in your code"
+          echo "   3. Test locally with 'expo start'"
+          echo "   4. Try pushing again"
+          echo ""
+          echo "💡 Tips:"
+          echo "   • Run 'npx tsc --noEmit' locally to check types"
+          echo "   • Use 'expo doctor' to check for common issues"
+          echo "   • Check that all dependencies are properly installed"
+          echo ""
+          exit 1
+        fi
+        echo "✅ TypeScript check passed!"
+      fail_text: ""
+
+# Commit message hooks - validate commit message format
+commit-msg:
+  commands:
+    # Validate conventional commit format
+    conventional-commit:
+      run: |
+        # The commit message file is passed as the first argument to commit-msg hooks
+        # In Lefthook, we need to read from the git commit message file
+        commit_file=".git/COMMIT_EDITMSG"
+
+        if [ -f "$commit_file" ]; then
+          commit_msg=$(cat "$commit_file")
+        elif [ -f "$1" ]; then
+          commit_msg=$(cat "$1")
+        else
+          echo "❌ ERROR: Cannot find commit message file"
+          exit 1
+        fi
+
+        first_line=$(echo "$commit_msg" | head -n1)
+
+        echo "🔍 Validating commit message: '$first_line'"
+
+        # Check if message is empty
+        if [ -z "$first_line" ]; then
+          echo "❌ EMPTY COMMIT MESSAGE"
+          echo "   Your commit message is empty!"
+          echo ""
+          echo "✅ Fix: Add a commit message"
+          echo "   Example: git commit -m 'feat: add new feature'"
+          echo ""
+          exit 1
+        fi
+
+        # Check for valid type
+        if ! echo "$first_line" | grep -qE '^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)'; then
+          echo "❌ INVALID TYPE"
+          echo "   Your commit message must start with a valid type"
+          echo ""
+          echo "✅ Valid types:"
+          echo "   • feat     - New feature"
+          echo "   • fix      - Bug fix"
+          echo "   • docs     - Documentation changes"
+          echo "   • style    - Code style changes (formatting, etc.)"
+          echo "   • refactor - Code refactoring"
+          echo "   • test     - Adding or updating tests"
+          echo "   • chore    - Maintenance tasks"
+          echo "   • perf     - Performance improvements"
+          echo "   • ci       - CI/CD changes"
+          echo "   • build    - Build system changes"
+          echo "   • revert   - Revert previous commit"
+          echo ""
+          echo "✅ Examples:"
+          echo "   feat: add user authentication"
+          echo "   fix: resolve login issue"
+          echo "   docs: update README"
+          echo ""
+          exit 1
+        fi
+
+        # Check for colon after type/scope
+        if ! echo "$first_line" | grep -qE '^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?:'; then
+          echo "❌ MISSING COLON"
+          echo "   Missing ':' after type or scope"
+          echo ""
+          echo "✅ Format: <type>[optional scope]: <description>"
+          echo "   Examples:"
+          echo "   feat: add new feature"
+          echo "   fix(auth): resolve login issue"
+          echo ""
+          exit 1
+        fi
+
+        # Check for space after colon
+        if ! echo "$first_line" | grep -qE '^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: '; then
+          echo "❌ MISSING SPACE"
+          echo "   Missing space after ':'"
+          echo ""
+          echo "✅ Format: <type>: <description> (note the space after colon)"
+          echo "   Examples:"
+          echo "   feat: add new feature  ✅"
+          echo "   feat:add new feature   ❌"
+          echo ""
+          exit 1
+        fi
+
+        # Extract description part
+        description=$(echo "$first_line" | sed -E 's/^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: //')
+
+        # Check description length
+        desc_length=${#description}
+        if [ $desc_length -eq 0 ]; then
+          echo "❌ EMPTY DESCRIPTION"
+          echo "   Description cannot be empty"
+          echo ""
+          echo "✅ Add a meaningful description after the colon"
+          echo "   Example: feat: add user authentication"
+          echo ""
+          exit 1
+        elif [ $desc_length -gt 50 ]; then
+          echo "❌ DESCRIPTION TOO LONG"
+          echo "   Description is $desc_length characters (max: 50)"
+          echo "   Current: '$description'"
+          echo ""
+          echo "✅ Shorten your description to 50 characters or less"
+          echo "   Use the commit body for detailed explanations"
+          echo ""
+          echo "✅ Example:"
+          echo "   Instead of: feat: implement comprehensive user authentication system with OAuth"
+          echo "   Use:        feat: implement user authentication"
+          echo ""
+          echo "   Then add details in the commit body (after a blank line)"
+          echo ""
+          exit 1
+        fi
+
+        # Check for capitalization (description should be lowercase)
+        if echo "$description" | grep -qE '^[A-Z]'; then
+          echo "⚠️  CAPITALIZATION WARNING"
+          echo "   Description should start with lowercase letter"
+          echo "   Current: '$description'"
+          echo ""
+          echo "✅ Conventional commits use lowercase descriptions"
+          echo "   Example: feat: add feature (not 'Add feature')"
+          echo ""
+          # This is just a warning, don't exit
+        fi
+
+        # Check for period at end (should not have one)
+        if echo "$description" | grep -qE '\.$'; then
+          echo "⚠️  PUNCTUATION WARNING"
+          echo "   Description should not end with a period"
+          echo "   Current: '$description'"
+          echo ""
+          echo "✅ Remove the period at the end"
+          echo "   Example: feat: add feature (not 'feat: add feature.')"
+          echo ""
+          # This is just a warning, don't exit
+        fi
+
+        # Check body line lengths (if there's a body)
+        body_lines=$(echo "$commit_msg" | tail -n +3)  # Skip first line and blank line
+        if [ -n "$body_lines" ]; then
+          echo "🔍 Checking commit body line lengths..."
+          line_num=3
+
+          # Save body to temp file for processing
+          echo "$body_lines" > /tmp/commit_body_check
+
+          # Check each line in the body
+          while IFS= read -r line; do
+            # Skip empty lines and comment lines (starting with #)
+            if [ -n "$line" ] && [ "${line#\#}" = "$line" ]; then
+              line_length=${#line}
+              if [ $line_length -gt 72 ]; then
+                echo "❌ BODY LINE TOO LONG"
+                echo "   Line $line_num is $line_length characters (max: 72)"
+                echo "   Line: '$line'"
+                echo ""
+                echo "✅ Fix: Break long lines into shorter ones"
+                echo "   • Keep each line under 72 characters"
+                echo "   • Use bullet points or numbered lists"
+                echo "   • Break at natural word boundaries"
+                echo ""
+                echo "✅ Example:"
+                echo "   Instead of: This is a very long line that exceeds the 72 character limit"
+                echo "   Use:"
+                echo "   This is a shorter line that fits within the limit"
+                echo "   and continues on the next line properly"
+                echo ""
+                echo "💡 Note: Comment lines (starting with #) are automatically ignored"
+                echo ""
+                rm -f /tmp/commit_body_check
+                exit 1
+              fi
+            fi
+            line_num=$((line_num + 1))
+          done < /tmp/commit_body_check
+
+          rm -f /tmp/commit_body_check
+          echo "✅ Body line lengths valid"
+        fi
+
+        # Success message
+        echo "✅ COMMIT MESSAGE VALID"
+        echo "   Type: $(echo "$first_line" | sed -E 's/^([^(:]+).*$/\1/')"
+        echo "   Description: '$description' ($desc_length/50 chars)"
+        if [ -n "$body_lines" ]; then
+          body_line_count=$(echo "$body_lines" | wc -l | tr -d ' ')
+          echo "   Body: $body_line_count lines (all ≤72 chars)"
+        fi
+        echo ""
+      fail_text: "Commit message validation failed"
+
+# Post-checkout hooks - run after checking out a branch
+post-checkout:
+  commands:
+    # Install dependencies if package.json changed
+    deps-install:
+      run: |
+        if git diff HEAD@{1} HEAD --name-only 2>/dev/null | grep -q "package.json\|pnpm-lock.yaml"; then
+          echo "📦 Package files changed, running pnpm install..."
+          pnpm install
+        fi
+      fail_text: ""
+
+# Post-merge hooks - run after merging branches
+post-merge:
+  commands:
+    # Install dependencies if package.json changed
+    deps-install:
+      run: |
+        if git diff HEAD@{1} HEAD --name-only 2>/dev/null | grep -q "package.json\|pnpm-lock.yaml"; then
+          echo "📦 Package files changed after merge, running pnpm install..."
+          pnpm install
+        fi
+      fail_text: ""
+
+# Skip hooks for specific scenarios
+skip_output:
+  - meta
+  - summary
